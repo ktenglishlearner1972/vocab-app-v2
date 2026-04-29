@@ -2,7 +2,7 @@
   "name": "vocab-app",
   "version": "1.0.0",
   "private": true,
-  "homepage": "https://ktenglishlearner1972.github.io/vocab-app",
+  "homepage": "https://ktenglishlearner1972.github.io/vocab-app-v2",
   "dependencies": {
     "gh-pages": "^6.3.0",
     "react": "^18.2.0",
