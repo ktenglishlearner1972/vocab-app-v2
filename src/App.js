@@ -1,8 +1,4 @@
-import React, { useMemo, useRef, useState, useEffect } from "react";
-
-const STORAGE_KEY = "vocab_app_state_v1";
-const HISTORY_KEY = "vocab_app_history_v1";
-const DAILY_GOAL = 200;
+import React, { useMemo, useState } from "react";
 
 function shuffle(array) {
   const arr = [...array];
@@ -13,105 +9,59 @@ function shuffle(array) {
   return arr;
 }
 
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function buildWeakPool(entries, mistakes) {
   const pool = [];
-
   for (const e of entries) {
     const m = mistakes[e.word] || 0;
     const weight = Math.min(5, m + 1);
-
     for (let i = 0; i < weight; i++) pool.push(e);
   }
-
   return shuffle(pool);
 }
 
 export default function VocabTestApp() {
-  const [entries, setEntries] = useState([
+  const [screen, setScreen] = useState("home");
+  const [mode, setMode] = useState("all");
+
+  const [entries] = useState([
     {
       word: "abandon",
+      meaning: "捨てる、放棄する",
       sentence: "He abandoned the old plan and started over.",
-      japanese: "彼は古い計画を捨ててやり直した。",
+      sentence_jp: "彼は古い計画を捨ててやり直した。",
       category: "基本単語"
     }
   ]);
 
   const [index, setIndex] = useState(0);
-  const [step, setStep] = useState(1);
-  const [learned, setLearned] = useState({});
+  const [step, setStep] = useState(0);
   const [mistakes, setMistakes] = useState({});
-  const [history, setHistory] = useState({});
-  const [mode, setMode] = useState("all");
 
-  const fileRef = useRef(null);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.entries) setEntries(parsed.entries);
-        if (parsed.learned) setLearned(parsed.learned);
-        if (parsed.mistakes) setMistakes(parsed.mistakes);
-      }
-
-      const h = localStorage.getItem(HISTORY_KEY);
-      if (h) setHistory(JSON.parse(h));
-    } catch (e) {}
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ entries, learned, mistakes }));
-  }, [entries, learned, mistakes]);
-
-  useEffect(() => {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  }, [history]);
-
-  const today = todayStr();
-  const reviewedToday = history[today] || 0;
+  // ⭐カスタムファイル名表示用
+  const [fileName, setFileName] = useState("");
 
   const currentPool = useMemo(() => {
     let pool = [...entries];
 
-    if (mode === "unlearned") {
-      pool = pool.filter((e) => !learned[e.word]);
-    }
-
-    if (mode === "weak") {
-      pool = buildWeakPool(entries, mistakes);
-    }
-
-    if (mode !== "test" && mode !== "weak") {
-      pool = shuffle(pool);
-    }
+    if (mode === "weak") pool = buildWeakPool(entries, mistakes);
+    else pool = shuffle(pool);
 
     return pool;
-  }, [entries, learned, mistakes, mode]);
+  }, [entries, mistakes, mode]);
 
   const current = currentPool[index] || null;
 
-  const learnedCount = Object.values(learned).filter(Boolean).length;
+  /* ================= ACTIONS ================= */
 
-  const weakRanking = useMemo(() => {
-    return [...entries]
-      .map((e) => ({ word: e.word, count: mistakes[e.word] || 0 }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 20);
-  }, [entries, mistakes]);
+  const startTest = () => {
+    setIndex(0);
+    setStep(0);
+    setScreen("test");
+  };
 
   const handleNext = () => {
-    setStep(1);
+    setStep(0);
     setIndex((p) => (p + 1) % Math.max(currentPool.length, 1));
-
-    setHistory((prev) => ({
-      ...prev,
-      [today]: (prev[today] || 0) + 1
-    }));
   };
 
   const handleWrong = () => {
@@ -130,96 +80,137 @@ export default function VocabTestApp() {
   };
 
   const handleCardTap = () => {
-    if (step < 3) setStep(step + 1);
+    setStep((p) => Math.min(p + 1, 2));
   };
 
-  const toggleLearned = () => {
-    if (!current) return;
-    setLearned((p) => ({ ...p, [current.word]: !p[current.word] }));
-  };
-
-  const handleFileUpload = async (event) => {
-    const files = Array.from(event.target.files || []);
-
-    for (const file of files) {
-      if (!file.name.toLowerCase().endsWith(".csv")) continue;
-
-      const text = await file.text();
-      const lines = text.split(/\r?\n/).filter(Boolean);
-      if (lines.length <= 1) continue;
-
-      const rows = lines.slice(1).map((line) => {
-        const [word, sentence, japanese, category] = line.split(",");
-        return {
-          word: (word || "").trim(),
-          sentence: (sentence || "").trim(),
-          japanese: (japanese || "").trim(),
-          category: (category || "未分類").replaceAll('"', '')
-        };
-      }).filter((r) => r.word);
-
-      setEntries((prev) => {
-        const set = new Set(prev.map((x) => x.word.toLowerCase()));
-        const unique = rows.filter((r) => !set.has(r.word.toLowerCase()));
-        return [...prev, ...unique];
-      });
+  /* ⭐ファイル選択（完全カスタム） */
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFileName(file.name);
+      // CSV読み込みはここに後で追加
     }
-
-    event.target.value = "";
   };
+
+  /* ================= HOME ================= */
+
+  if (screen === "home") {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow p-6 text-center space-y-10">
+
+          <h1 className="text-xl font-bold">英単語テストアプリ</h1>
+
+          {/* 単語テスト */}
+          <div className="space-y-4">
+            <div className="font-semibold">－ 単語テスト －</div>
+
+            <div className="flex flex-col gap-3 items-center">
+              <button onClick={() => { setMode("all"); startTest(); }}
+                className="w-56 h-12 border rounded-lg">
+                すべて
+              </button>
+
+              <button onClick={() => { setMode("weak"); startTest(); }}
+                className="w-56 h-12 border rounded-lg">
+                苦手優先
+              </button>
+
+              <button onClick={() => { setMode("all"); startTest(); }}
+                className="w-56 h-12 border rounded-lg">
+                テスト
+              </button>
+            </div>
+          </div>
+
+          {/* 苦手ランキング */}
+          <div className="space-y-4">
+            <div className="font-semibold">－ 苦手ランキング －</div>
+
+            <button
+              onClick={() => setScreen("ranking")}
+              className="w-56 h-12 border rounded-lg"
+            >
+              苦手単語
+            </button>
+          </div>
+
+          {/* ⭐単語インポート（完全カスタム・標準UI排除済み） */}
+          <div className="space-y-4">
+            <div className="font-semibold">－ 単語インポート －</div>
+
+            <div className="flex flex-col items-center gap-2">
+
+              <label className="w-56 h-12 border rounded-lg flex items-center justify-center cursor-pointer">
+                ファイルを選択
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </label>
+
+              {fileName && (
+                <div className="text-xs text-gray-500">
+                  {fileName}
+                </div>
+              )}
+
+            </div>
+          </div>
+
+        </div>
+      </div>
+    );
+  }
+
+  /* ================= TEST ================= */
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 flex items-center justify-center">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow p-6 space-y-4">
-        <h1 className="text-xl font-bold">英単語テストアプリ</h1>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow p-6 space-y-10">
 
-        <div className="text-xs text-gray-600">
-          今日: {reviewedToday} / {DAILY_GOAL}
-        </div>
+        <button onClick={() => setScreen("home")} className="text-xs underline">
+          ← ホーム
+        </button>
 
-        <div className="flex gap-2 text-xs flex-wrap">
-          <button onClick={() => setMode("all")}>全て</button>
-          <button onClick={() => setMode("unlearned")}>未習得</button>
-          <button onClick={() => setMode("weak")}>苦手優先</button>
-          <button onClick={() => setMode("test")}>テスト</button>
-        </div>
+        <div onClick={handleCardTap}
+          className="border rounded-2xl p-6 text-center space-y-5 cursor-pointer">
 
-        <input type="file" ref={fileRef} onChange={handleFileUpload} accept=".csv,.xlsx" multiple />
-
-        <div
-          onClick={handleCardTap}
-          className="border rounded-2xl p-6 text-center space-y-2"
-        >
           {current && (
             <>
               <div className="text-2xl font-bold">{current.word}</div>
-              {step >= 2 && <div>{current.sentence}</div>}
-              {step >= 3 && (
-                <>
-                  <div className="text-sm text-gray-600">{current.japanese}</div>
-                  <div className="text-xs">{current.category}</div>
-                </>
-              )}
+
+              <div className={step >= 1 ? "text-black" : "text-gray-300"}>
+                {current.sentence}
+              </div>
+
+              <div className={step >= 2 ? "text-black" : "text-gray-300"}>
+                {current.meaning}
+              </div>
+
+              <div className={step >= 2 ? "text-black" : "text-gray-300"}>
+                {current.sentence_jp}
+              </div>
             </>
           )}
         </div>
 
-        <button onClick={handleNext} className="w-full border p-2 rounded">次へ</button>
-        <button onClick={handleWrong} className="w-full border p-2 rounded">間違えた</button>
-        <button onClick={handleSpeak} className="w-full border p-2 rounded">発音🔊</button>
+        <div className="space-y-3">
+          <button onClick={handleNext} className="w-full border p-2 rounded">
+            次へ
+          </button>
 
-        <div className="text-xs text-gray-500">
-          進捗 {learnedCount} / {entries.length}
+          <button onClick={handleWrong} className="w-full border p-2 rounded">
+            間違えた
+          </button>
+
+          <button onClick={handleSpeak} className="w-full border p-2 rounded">
+            発音🔊
+          </button>
         </div>
 
-        <div className="text-xs">
-          <div className="font-bold mt-2">苦手ランキングTOP20</div>
-          {weakRanking.map((w, i) => (
-            <div key={w.word}>
-              {i + 1}. {w.word}（{w.count}回）
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );
