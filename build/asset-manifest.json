@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/vocab-app/static/css/main.c76de836.css",
+    "main.js": "/vocab-app/static/js/main.f639ba05.js",
+    "index.html": "/vocab-app/index.html",
+    "main.c76de836.css.map": "/vocab-app/static/css/main.c76de836.css.map",
+    "main.f639ba05.js.map": "/vocab-app/static/js/main.f639ba05.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.c76de836.css",
+    "static/js/main.f639ba05.js"
+  ]
+}
